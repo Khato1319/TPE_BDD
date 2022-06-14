@@ -184,7 +184,6 @@ FROM
     continente
 where
     nombreC = new.continente into contId;
-
 end if;
 
 INSERT INTO
@@ -262,7 +261,8 @@ CREATE
 OR REPLACE FUNCTION AnalisisTransporte(
     IN anio INT,
     IN sumaAerea INT,
-    IN sumaMaritima INT
+    IN sumaMaritima INT,
+    IN sumaTotal INT
 ) RETURNS VOID AS $$ DECLARE cantPaises INT := (
     SELECT
         count(idp)
@@ -281,8 +281,8 @@ sumaMaritima,
 (sumaMaritima / cantPaises) :: INT;
 
 RAISE NOTICE '----------------------------%   %',
-sumaAerea + sumaMaritima,
-((sumaAerea + sumaMaritima) / cantPaises) :: INT;
+sumaTotal,
+((sumaTotal) / cantPaises) :: INT;
 
 END;
 
@@ -309,7 +309,9 @@ ORDER BY
     anio;
 
 CREATE
-OR REPLACE FUNCTION AnalisisConsolidado(IN qty INT) RETURNS VOID AS $$ DECLARE cantPaises INT;
+OR REPLACE FUNCTION AnalisisConsolidado(IN qty INT) RETURNS VOID AS $$
+    
+DECLARE
 
 fila RECORD;
 
@@ -318,6 +320,8 @@ ultimoAnio INT := NULL;
 sumaAerea INT := 0;
 
 sumaMaritima INT := 0;
+
+sumaTotal INT := 0;
 
 maxAnio INT := (
     SELECT
@@ -368,11 +372,13 @@ EXIT
 WHEN NOT FOUND;
 
 IF ultimoAnio IS NOT NULL
-AND fila.anio <> ultimoAnio THEN PERFORM AnalisisTransporte(ultimoAnio, sumaAerea, sumaMaritima);
+AND fila.anio <> ultimoAnio THEN PERFORM AnalisisTransporte(ultimoAnio, sumaAerea, sumaMaritima, sumaTotal);
 
 sumaMaritima := 0;
 
 sumaAerea := 0;
+
+sumaTotal := 0;
 
 printedYear := FALSE;
 
@@ -381,6 +387,8 @@ end if;
 sumaAerea := sumaAerea + fila.aerea;
 
 sumaMaritima := sumaMaritima + fila.maritima;
+
+sumaTotal := sumaTotal + fila.total;
 
 ultimoAnio := fila.anio;
 
@@ -401,11 +409,11 @@ END IF;
 
 END LOOP;
 
-PERFORM AnalisisTransporte(ultimoAnio, sumaAerea, sumaMaritima);
+PERFORM AnalisisTransporte(ultimoAnio, sumaAerea, sumaMaritima, sumaTotal);
 
 END;
 
 $$ LANGUAGE plpgsql;
 
 SELECT
-    AnalisisConsolidado(2);
+    AnalisisConsolidado(20);

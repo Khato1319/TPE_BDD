@@ -5,32 +5,27 @@ CREATE TABLE continente (
     UNIQUE (nombreC)
 );
 
-CREATE
-OR REPLACE FUNCTION inserta_continente() RETURNS trigger AS $$
+CREATE OR REPLACE FUNCTION inserta_continente() RETURNS trigger AS $$
+    DECLARE
+        qty INT;
 
-DECLARE qty INT;
-
-BEGIN
-SELECT
-    count(*)
-from
-    continente
-where
-    continente.nombreC = new.nombreC INTO qty;
-
-IF (qty > 0) THEN RETURN NULL;
-
-ELSE RETURN new;
-
-END IF;
-
-END;
-
+    BEGIN
+        SELECT
+            count(*)
+        FROM
+            continente
+        WHERE
+            continente.nombreC = new.nombreC INTO qty;
+        IF (qty > 0) THEN
+            RETURN NULL;
+        ELSE
+            RETURN new;
+        END IF;
+    END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER insertacontinente BEFORE
-INSERT
-    ON continente FOR EACH ROW EXECUTE PROCEDURE inserta_continente();
+CREATE TRIGGER insertacontinente BEFORE INSERT ON continente FOR EACH ROW EXECUTE PROCEDURE inserta_continente();
+
 
 CREATE TABLE region (
     idR SERIAL,
@@ -41,31 +36,27 @@ CREATE TABLE region (
     FOREIGN KEY (idC) REFERENCES continente ON DELETE CASCADE
 );
 
-CREATE
-OR REPLACE FUNCTION inserta_region() RETURNS trigger AS $$ DECLARE qty INT;
 
-BEGIN
-SELECT
-    count(*)
-from
-    region
-where
-    region.nombreR = new.nombreR
-    AND region.idC = new.idC INTO qty;
-
-IF (qty > 0) THEN RETURN NULL;
-
-ELSE RETURN new;
-
-END IF;
-
-END;
-
+CREATE OR REPLACE FUNCTION inserta_region() RETURNS trigger AS $$
+    DECLARE
+        qty INT;
+    BEGIN
+        SELECT
+            count(*)
+        FROM
+            region
+        WHERE
+            region.nombreR = new.nombreR AND region.idC = new.idC INTO qty;
+        IF (qty > 0) THEN
+            RETURN NULL;
+        ELSE
+            RETURN new;
+        END IF;
+    END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER insertaregion BEFORE
-INSERT
-    ON region FOR EACH ROW EXECUTE PROCEDURE inserta_region();
+CREATE TRIGGER insertaregion BEFORE INSERT ON region FOR EACH ROW EXECUTE PROCEDURE inserta_region();
+
 
 CREATE TABLE pais (
     idP SERIAL,
@@ -76,31 +67,26 @@ CREATE TABLE pais (
     FOREIGN KEY (idR) REFERENCES region ON DELETE CASCADE
 );
 
-CREATE
-OR REPLACE FUNCTION inserta_pais() RETURNS trigger AS $$ DECLARE qty INT;
-
-BEGIN
-SELECT
-    count(*)
-from
-    pais
-where
-    pais.nombreP = new.nombreP
-    and pais.idR = new.idR INTO qty;
-
-IF (qty > 0) THEN RETURN NULL;
-
-ELSE RETURN new;
-
-END IF;
-
-END;
-
+CREATE OR REPLACE FUNCTION inserta_pais() RETURNS trigger AS $$
+    DECLARE
+        qty INT;
+    BEGIN
+        SELECT
+            count(*)
+        FROM
+            pais
+        WHERE
+            pais.nombreP = new.nombreP AND pais.idR = new.idR INTO qty;
+        IF (qty > 0) THEN
+            RETURN NULL;
+        ELSE
+            RETURN new;
+        END IF;
+    END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER insertapais BEFORE
-INSERT
-    ON pais FOR EACH ROW EXECUTE PROCEDURE inserta_pais();
+CREATE TRIGGER insertapais BEFORE INSERT ON pais FOR EACH ROW EXECUTE PROCEDURE inserta_pais();
+
 
 CREATE TABLE anio (
     anio INT NOT NULL,
@@ -108,42 +94,36 @@ CREATE TABLE anio (
     PRIMARY KEY (anio)
 );
 
-CREATE
-OR REPLACE FUNCTION isleapyear(year INT) RETURNS boolean AS $$ BEGIN RETURN (year % 4 = 0)
-AND (
-    (year % 100 <> 0)
-    or (year % 400 = 0)
-);
-
-END;
-
+CREATE OR REPLACE FUNCTION isleapyear(year INT) RETURNS boolean AS $$
+    BEGIN
+        RETURN (year % 4 = 0) AND ((year % 100 <> 0) OR (year % 400 = 0));
+    END;
 $$ LANGUAGE plpgsql;
 
-CREATE
-OR REPLACE FUNCTION inserta_anio() RETURNS trigger AS $$ DECLARE qty INT;
 
-BEGIN new.bisiesto := isleapyear(new.anio);
+CREATE OR REPLACE FUNCTION inserta_anio() RETURNS trigger AS $$
+    DECLARE
+        qty INT;
 
-SELECT
-    count(*)
-from
-    anio
-where
-    anio.anio = new.anio INTO qty;
+    BEGIN
+        new.bisiesto := isleapyear(new.anio);
+        SELECT
+            count(*)
+        FROM
+            anio
+        WHERE
+            anio.anio = new.anio INTO qty;
 
-IF (qty > 0) THEN RETURN NULL;
-
-ELSE RETURN new;
-
-END IF;
-
-END;
-
+        IF (qty > 0) THEN
+            RETURN NULL;
+        ELSE
+            RETURN new;
+        END IF;
+    END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER insertaanio BEFORE
-INSERT
-    ON anio FOR EACH ROW EXECUTE PROCEDURE inserta_anio();
+CREATE TRIGGER insertaanio BEFORE INSERT ON anio FOR EACH ROW EXECUTE PROCEDURE inserta_anio();
+
 
 CREATE TABLE turistas (
     pais TEXT,
@@ -159,133 +139,109 @@ CREATE TABLE turistas (
     PRIMARY KEY (anio, idP)
 );
 
-CREATE
-OR REPLACE FUNCTION inserta_turista() RETURNS trigger AS $$ DECLARE contId INT;
+CREATE OR REPLACE FUNCTION inserta_turista() RETURNS trigger AS $$
+    DECLARE
+        contId INT;
+        regId INT;
+        paisId INT;
 
-regId INT;
+    BEGIN
+        INSERT INTO anio(anio) VALUES (new.anio);
+        INSERT INTO continente(nombreC) VALUES (new.continente) RETURNING idC INTO contId;
 
-paisId INT;
+        IF (contId IS NULL) THEN
+            SELECT
+                idC
+            FROM
+                continente
+            WHERE
+                nombreC = new.continente INTO contId;
+        END IF;
 
-BEGIN
-INSERT INTO
-    anio(anio)
-values
-    (new.anio);
+        INSERT INTO region(nombreR, idC) VALUES (new.region, contId) RETURNING idR INTO regId;
 
-INSERT INTO
-    continente(nombreC)
-values
-    (new.continente) RETURNING idC INTO contId;
+        IF (regId IS NULL) THEN
+            SELECT
+                idR
+            FROM
+                region
+            WHERE
+                nombreR = new.region INTO regId;
+        END IF;
 
-IF contId IS NULL then
-SELECT
-    idC
-FROM
-    continente
-where
-    nombreC = new.continente into contId;
-end if;
+        INSERT INTO pais(nombreP, idR) VALUES (new.pais, regId) RETURNING idP INTO paisId;
 
-INSERT INTO
-    region(nombreR, idC)
-values
-    (new.region, contId) RETURNING idR INTO regId;
+        IF (paisId IS NULL) THEN
+            SELECT
+                idP
+            FROM
+                pais
+            WHERE
+                nombreP = new.pais AND idR = regId INTO paisId;
+        END IF;
 
-IF regId IS NULL then
-SELECT
-    idR
-FROM
-    region
-where
-    nombreR = new.region into regId;
+        new.idP := paisId;
 
-end if;
-
-INSERT INTO
-    pais(nombreP, idR)
-values
-    (new.pais, regId) RETURNING idP INTO paisId;
-
-IF paisId IS NULL then
-SELECT
-    idP
-FROM
-    pais
-where
-    nombreP = new.pais
-    and idR = regId into paisId;
-
-end if;
-
-new.idP := paisId;
-
-RETURN new;
-
-END;
-
+        RETURN new;
+    END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER insertaturita BEFORE
-INSERT
-    ON turistas FOR EACH ROW EXECUTE PROCEDURE inserta_turista();
+CREATE TRIGGER insertaturita BEFORE INSERT ON turistas FOR EACH ROW EXECUTE PROCEDURE inserta_turista();
 
-CREATE
-OR REPLACE PROCEDURE copy_data() AS $$ BEGIN copy turistas (
-    pais,
-    total,
-    aerea,
-    maritima,
-    region,
-    continente,
-    anio
-)
-FROM
-    'C:\Users\khcat\DataGripProjects\TPE\tourists-rj.csv' csv header;
 
-END;
-
+CREATE OR REPLACE PROCEDURE copy_data() AS $$
+    BEGIN
+        copy turistas (
+            pais,
+            total,
+            aerea,
+            maritima,
+            region,
+            continente,
+            anio
+        )
+        FROM
+            'C:\Users\khcat\DataGripProjects\TPE\tourists-rj.csv' csv header;
+    END;
 $$ LANGUAGE plpgsql;
 
 CALL copy_data();
 
-ALTER TABLE
-    turistas DROP COLUMN pais;
+ALTER TABLE turistas DROP COLUMN pais;
 
-ALTER TABLE
-    turistas DROP COLUMN region;
+ALTER TABLE turistas DROP COLUMN region;
 
-ALTER TABLE
-    turistas DROP COLUMN continente;
+ALTER TABLE turistas DROP COLUMN continente;
 
-CREATE
-OR REPLACE FUNCTION AnalisisTransporte(
+CREATE OR REPLACE FUNCTION AnalisisTransporte(
     IN anio INT,
     IN sumaAerea INT,
     IN sumaMaritima INT,
     IN sumaTotal INT
-) RETURNS VOID AS $$ DECLARE cantPaises INT := (
-    SELECT
-        count(idp)
-    FROM
-        turistas
-    WHERE
-        turistas.anio = AnalisisTransporte.anio
-);
+) RETURNS VOID AS $$
+    DECLARE
+        cantPaises INT := (
+            SELECT
+                count(idp)
+            FROM
+                turistas
+            WHERE
+                turistas.anio = AnalisisTransporte.anio
+        );
 
-BEGIN RAISE NOTICE '----   Transporte:   Aereo   %   %',
-sumaAerea,
-(sumaAerea / cantPaises) :: INT;
+    BEGIN
+        RAISE NOTICE '----   Transporte:   Aereo   %   %',
+        sumaAerea,
+        (sumaAerea / cantPaises) :: INT;
 
-RAISE NOTICE '----   Transporte:   Maritimo   %   %',
-sumaMaritima,
-(sumaMaritima / cantPaises) :: INT;
+        RAISE NOTICE '----   Transporte:   Maritimo   %   %',
+        sumaMaritima,
+        (sumaMaritima / cantPaises) :: INT;
 
-RAISE NOTICE '----------------------------%   %',
-sumaTotal,
-((sumaTotal) / cantPaises) :: INT;
-
-END;
-
+        RAISE NOTICE '----------------------------%   %',
+        sumaTotal,
+        ((sumaTotal) / cantPaises) :: INT;
+    END;
 $$ LANGUAGE plpgsql;
 
 SELECT
@@ -296,141 +252,98 @@ SELECT
     SUM(turistas.aerea) AS aerea,
     SUM(turistas.maritima) AS maritima
 FROM
-    turistas NATURAL
-    JOIN pais NATURAL
-    JOIN region NATURAL
-    JOIN continente
+    turistas NATURAL JOIN pais NATURAL JOIN region NATURAL JOIN continente
 WHERE
     anio = 2007
 GROUP BY
-    nombrec,
-    anio
+    nombrec, anio
 ORDER BY
     anio;
 
-CREATE
-OR REPLACE FUNCTION AnalisisConsolidado(IN qty INT) RETURNS VOID AS $$
+CREATE OR REPLACE FUNCTION AnalisisConsolidado(IN qty INT) RETURNS VOID AS $$
+    DECLARE
+    fila RECORD;
+    ultimoAnio INT := NULL;
+    sumaAerea INT := 0;
+    sumaMaritima INT := 0;
+    sumaTotal INT := 0;
+    flag boolean := false;
 
-DECLARE
+    cursor CURSOR FOR (
+        SELECT
+            anio,
+            nombreC,
+            SUM(turistas.total) AS total,
+            AVG(turistas.total) :: INT AS promedio,
+            SUM(turistas.aerea) AS aerea,
+            SUM(turistas.maritima) AS maritima
+        FROM
+            turistas NATURAL JOIN pais NATURAL JOIN region NATURAL JOIN continente
+        GROUP BY
+            nombrec, anio
+        ORDER BY
+            anio
+    );
+    printedYear BOOLEAN := FALSE;
 
-fila RECORD;
+    BEGIN
+        IF (qty <= 0) THEN
+            RETURN;
+        END IF;
 
-ultimoAnio INT := NULL;
+        RAISE NOTICE '--------------------------------------------';
+        RAISE NOTICE '-------CONSOLIDATED TOURIST REPORT----------';
+        RAISE NOTICE '--------------------------------------------';
+        RAISE NOTICE 'Year---Category--------------Total---Average';
+        RAISE NOTICE '--------------------------------------------';
+        OPEN cursor;
+        LOOP
+            FETCH cursor INTO fila;
+            EXIT
+            WHEN NOT FOUND;
 
-sumaAerea INT := 0;
+            IF (QTY <=0) THEN
+                EXIT;
+            END IF;
 
-sumaMaritima INT := 0;
+            IF ((ultimoAnio IS NOT NULL) AND (fila.anio <> ultimoAnio)) THEN
+                PERFORM AnalisisTransporte(ultimoAnio, sumaAerea, sumaMaritima, sumaTotal);
+                sumaMaritima := 0;
+                sumaAerea := 0;
+                sumaTotal := 0;
+                printedYear := FALSE;
+                qty := qty - 1;
+                IF (qty <= 0) THEN
+                    flag := true;
+                     EXIT;
+                END IF;
+            END IF;
 
-sumaTotal INT := 0;
+            sumaAerea := sumaAerea + fila.aerea;
+            sumaMaritima := sumaMaritima + fila.maritima;
+            sumaTotal := sumaTotal + fila.total;
+            ultimoAnio := fila.anio;
 
-flag boolean := false;
+            IF (printedYear) THEN
+                RAISE NOTICE '----   Continente: %   %   %',
+                fila.nombreC,
+                fila.total,
+                fila.promedio;
 
+            ELSE
+                RAISE NOTICE '%   Continente: %   %   %',
+                fila.anio,
+                fila.nombreC,
+                fila.total,
+                fila.promedio;
+                printedYear := TRUE;
+            END IF;
+        END LOOP;
 
-cursor CURSOR FOR (
-    SELECT
-        anio,
-        nombreC,
-        SUM(turistas.total) AS total,
-        AVG(turistas.total) :: INT AS promedio,
-        SUM(turistas.aerea) AS aerea,
-        SUM(turistas.maritima) AS maritima
-    FROM
-        turistas NATURAL
-        JOIN pais NATURAL
-        JOIN region NATURAL
-        JOIN continente
-    GROUP BY
-        nombrec,
-        anio
-    ORDER BY
-        anio
-);
-
-printedYear BOOLEAN := FALSE;
-
-BEGIN
-
-    IF qty <= 0 THEN RETURN;
-    END IF;
-
-RAISE NOTICE '--------------------------------------------';
-
-RAISE NOTICE '-------CONSOLIDATED TOURIST REPORT----------';
-
-RAISE NOTICE '--------------------------------------------';
-
-RAISE NOTICE 'Year---Category--------------Total---Average';
-
-RAISE NOTICE '--------------------------------------------';
-
-OPEN cursor;
-
-LOOP FETCH cursor INTO fila;
-
-EXIT
-WHEN NOT FOUND;
-
-IF QTY <=0 then exit;
-end if;
-
-IF ultimoAnio IS NOT NULL
-AND fila.anio <> ultimoAnio THEN PERFORM AnalisisTransporte(ultimoAnio, sumaAerea, sumaMaritima, sumaTotal);
-
-sumaMaritima := 0;
-
-sumaAerea := 0;
-
-sumaTotal := 0;
-
-
-printedYear := FALSE;
-
-qty := qty - 1;
-
-IF qty <= 0 THEN
-    flag := true;
-     EXIT;
-END IF;
-
-end if;
-
-
-
-sumaAerea := sumaAerea + fila.aerea;
-
-sumaMaritima := sumaMaritima + fila.maritima;
-
-sumaTotal := sumaTotal + fila.total;
-
-ultimoAnio := fila.anio;
-
-IF printedYear THEN RAISE NOTICE '----   Continente: %   %   %',
-fila.nombreC,
-fila.total,
-fila.promedio;
-
-ELSE RAISE NOTICE '%   Continente: %   %   %',
-fila.anio,
-fila.nombreC,
-fila.total,
-fila.promedio;
-
-printedYear := TRUE;
-
-END IF;
-
-END LOOP;
-
-IF NOT flag THEN
-        PERFORM AnalisisTransporte(ultimoAnio, sumaAerea, sumaMaritima, sumaTotal);
-END IF;
-
-
-
-END;
-
+        IF (NOT flag) THEN
+                PERFORM AnalisisTransporte(ultimoAnio, sumaAerea, sumaMaritima, sumaTotal);
+        END IF;
+    END;
 $$ LANGUAGE plpgsql;
 
-
-SELECT
-    AnalisisConsolidado(19);
+SELECT AnalisisConsolidado(19);

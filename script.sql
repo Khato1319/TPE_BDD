@@ -287,7 +287,10 @@ CREATE OR REPLACE FUNCTION AnalisisConsolidado(IN qty INT) RETURNS VOID AS $$
     printedYear BOOLEAN := FALSE;
 
     BEGIN
-        IF (qty <= 0) THEN
+        IF (qty < 0) THEN
+            RAISE EXCEPTION 'LA CANTIDAD NO PUEDE SER NEGATIVA' USING ERRCODE = 'PP111';
+        END IF;
+        IF (qty = 0) THEN
             RETURN;
         END IF;
 
@@ -346,4 +349,4 @@ CREATE OR REPLACE FUNCTION AnalisisConsolidado(IN qty INT) RETURNS VOID AS $$
     END;
 $$ LANGUAGE plpgsql;
 
-SELECT AnalisisConsolidado(19);
+SELECT AnalisisConsolidado(-5);

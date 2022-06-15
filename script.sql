@@ -125,19 +125,21 @@ $$ LANGUAGE plpgsql;
 CREATE TRIGGER insertaanio BEFORE INSERT ON anio FOR EACH ROW EXECUTE PROCEDURE inserta_anio();
 
 
-CREATE TABLE turistas (
-    pais TEXT,
+CREATE TABLE turista (
     aerea INT NOT NULL,
     maritima INT NOT NULL,
     total INT NOT NULL,
-    region TEXT,
-    continente TEXT,
     anio INT NOT NULL,
     idP INT NOT NULL,
     FOREIGN KEY (anio) REFERENCES anio (anio) ON DELETE CASCADE,
     FOREIGN KEY (idP) REFERENCES pais (idP) ON DELETE CASCADE,
     PRIMARY KEY (anio, idP)
 );
+
+CREATE VIEW turistas AS
+SELECT nombreP AS pais, total, aerea, maritima, nombreR AS region, nombreC AS continente, anio
+FROM turista NATURAL JOIN pais NATURAL JOIN
+region NATURAL JOIN continente;
 
 CREATE OR REPLACE FUNCTION inserta_turista() RETURNS trigger AS $$
     DECLARE
@@ -180,38 +182,13 @@ CREATE OR REPLACE FUNCTION inserta_turista() RETURNS trigger AS $$
                 nombreP = new.pais AND idR = regId INTO paisId;
         END IF;
 
-        new.idP := paisId;
+        INSERT INTO turista(aerea, maritima, total, anio, idP) values(new.aerea, new.maritima, new.total, new.anio, paisId);
 
-        RETURN new;
+        RETURN null;
     END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER insertaturita BEFORE INSERT ON turistas FOR EACH ROW EXECUTE PROCEDURE inserta_turista();
-
-
-CREATE OR REPLACE PROCEDURE copy_data() AS $$
-    BEGIN
-        copy turistas (
-            pais,
-            total,
-            aerea,
-            maritima,
-            region,
-            continente,
-            anio
-        )
-        FROM
-            'C:\Users\khcat\DataGripProjects\TPE\tourists-rj.csv' csv header;
-    END;
-$$ LANGUAGE plpgsql;
-
-CALL copy_data();
-
-ALTER TABLE turistas DROP COLUMN pais;
-
-ALTER TABLE turistas DROP COLUMN region;
-
-ALTER TABLE turistas DROP COLUMN continente;
+CREATE TRIGGER insertaturista INSTEAD OF INSERT ON turistas FOR EACH ROW EXECUTE PROCEDURE inserta_turista();
 
 CREATE OR REPLACE FUNCTION AnalisisTransporte(
     IN anio INT,
@@ -224,12 +201,19 @@ CREATE OR REPLACE FUNCTION AnalisisTransporte(
             SELECT
                 count(idp)
             FROM
-                turistas
+                turista
             WHERE
-                turistas.anio = AnalisisTransporte.anio
+                turista.anio = AnalisisTransporte.anio
         );
 
     BEGIN
+        IF anio = 0 THEN
+            RETURN;
+        END IF;
+        IF cantPaises = 0 THEN
+            cantPaises := 1;
+        END IF;
+
         RAISE NOTICE '----   Transporte:   Aereo   %   %',
         sumaAerea,
         (sumaAerea / cantPaises) :: INT;
@@ -247,12 +231,12 @@ $$ LANGUAGE plpgsql;
 SELECT
     anio,
     nombreC,
-    SUM(turistas.total) AS total,
-    AVG(turistas.total) :: INT AS promedio,
-    SUM(turistas.aerea) AS aerea,
-    SUM(turistas.maritima) AS maritima
+    SUM(turista.total) AS total,
+    AVG(turista.total) :: INT AS promedio,
+    SUM(turista.aerea) AS aerea,
+    SUM(turista.maritima) AS maritima
 FROM
-    turistas NATURAL JOIN pais NATURAL JOIN region NATURAL JOIN continente
+    turista NATURAL JOIN pais NATURAL JOIN region NATURAL JOIN continente
 WHERE
     anio = 2007
 GROUP BY
@@ -273,12 +257,12 @@ CREATE OR REPLACE FUNCTION AnalisisConsolidado(IN qty INT) RETURNS VOID AS $$
         SELECT
             anio,
             nombreC,
-            SUM(turistas.total) AS total,
-            AVG(turistas.total) :: INT AS promedio,
-            SUM(turistas.aerea) AS aerea,
-            SUM(turistas.maritima) AS maritima
+            SUM(turista.total) AS total,
+            AVG(turista.total) :: INT AS promedio,
+            SUM(turista.aerea) AS aerea,
+            SUM(turista.maritima) AS maritima
         FROM
-            turistas NATURAL JOIN pais NATURAL JOIN region NATURAL JOIN continente
+            turista NATURAL JOIN pais NATURAL JOIN region NATURAL JOIN continente
         GROUP BY
             nombrec, anio
         ORDER BY
@@ -343,10 +327,10 @@ CREATE OR REPLACE FUNCTION AnalisisConsolidado(IN qty INT) RETURNS VOID AS $$
             END IF;
         END LOOP;
 
-        IF (NOT flag) THEN
+        IF (NOT flag AND ultimoAnio IS NOT NULL) THEN
                 PERFORM AnalisisTransporte(ultimoAnio, sumaAerea, sumaMaritima, sumaTotal);
         END IF;
     END;
 $$ LANGUAGE plpgsql;
 
-SELECT AnalisisConsolidado(-5);
+SELECT AnalisisConsolidado(2);

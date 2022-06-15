@@ -310,7 +310,7 @@ ORDER BY
 
 CREATE
 OR REPLACE FUNCTION AnalisisConsolidado(IN qty INT) RETURNS VOID AS $$
-    
+
 DECLARE
 
 fila RECORD;
@@ -323,12 +323,8 @@ sumaMaritima INT := 0;
 
 sumaTotal INT := 0;
 
-maxAnio INT := (
-    SELECT
-        MIN(anio.anio)
-    FROM
-        anio
-) + qty - 1;
+flag boolean := false;
+
 
 cursor CURSOR FOR (
     SELECT
@@ -343,8 +339,6 @@ cursor CURSOR FOR (
         JOIN pais NATURAL
         JOIN region NATURAL
         JOIN continente
-    WHERE
-        anio <= maxAnio
     GROUP BY
         nombrec,
         anio
@@ -354,7 +348,12 @@ cursor CURSOR FOR (
 
 printedYear BOOLEAN := FALSE;
 
-BEGIN RAISE NOTICE '--------------------------------------------';
+BEGIN
+
+    IF qty <= 0 THEN RETURN;
+    END IF;
+
+RAISE NOTICE '--------------------------------------------';
 
 RAISE NOTICE '-------CONSOLIDATED TOURIST REPORT----------';
 
@@ -371,6 +370,9 @@ LOOP FETCH cursor INTO fila;
 EXIT
 WHEN NOT FOUND;
 
+IF QTY <=0 then exit;
+end if;
+
 IF ultimoAnio IS NOT NULL
 AND fila.anio <> ultimoAnio THEN PERFORM AnalisisTransporte(ultimoAnio, sumaAerea, sumaMaritima, sumaTotal);
 
@@ -380,9 +382,19 @@ sumaAerea := 0;
 
 sumaTotal := 0;
 
+
 printedYear := FALSE;
 
+qty := qty - 1;
+
+IF qty <= 0 THEN
+    flag := true;
+     EXIT;
+END IF;
+
 end if;
+
+
 
 sumaAerea := sumaAerea + fila.aerea;
 
@@ -409,11 +421,16 @@ END IF;
 
 END LOOP;
 
-PERFORM AnalisisTransporte(ultimoAnio, sumaAerea, sumaMaritima, sumaTotal);
+IF NOT flag THEN
+        PERFORM AnalisisTransporte(ultimoAnio, sumaAerea, sumaMaritima, sumaTotal);
+END IF;
+
+
 
 END;
 
 $$ LANGUAGE plpgsql;
 
+
 SELECT
-    AnalisisConsolidado(20);
+    AnalisisConsolidado(19);
